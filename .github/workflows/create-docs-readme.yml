@@ -8,35 +8,70 @@ on:
         required: false
         default: 'Add docs/README.md'
 
+permissions:
+  contents: write
+
 jobs:
   create-file:
     runs-on: ubuntu-latest
     steps:
-      - name: Create or update docs/README.md on add/docs-readme
-        uses: peter-evans/create-or-update-file@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
-          path: docs/README.md
-          commit-message: ${{ github.event.inputs.commit_message }}
-          committer: GitHub Actions <actions@github.com>
-          author: ${{ github.actor }} <${{ github.actor }}@users.noreply.github.com>
-          content: |
-            # Design System
+          persist-credentials: true
+          fetch-depth: 0
 
-            This repository contains components, tokens, and guidelines for the Design System.
+      - name: Create or update docs/README.md on add/docs-readme
+        env:
+          COMMIT_MSG_INPUT: ${{ github.event.inputs.commit_message }}
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-            ## Structure
+          # If branch exists remotely, fetch and switch to it; otherwise create it locally
+          if git ls-remote --exit-code origin refs/heads/add/docs-readme; then
+            git fetch origin add/docs-readme:add/docs-readme
+            git checkout add/docs-readme
+          else
+            git checkout -b add/docs-readme
+          fi
 
-            - tokens/ — design tokens (colors, spacing, typography)
-            - components/ — UI components
-            - docs/ — documentation and usage examples
+          # Create docs/README.md
+          mkdir -p docs
+          cat > docs/README.md <<'EOF'
+# Design System
 
-            ## Contributing
+This repository contains components, tokens, and guidelines for the Design System.
 
-            1. Fork the repo and create a topic branch.
-            2. Run tests and linters before opening a PR.
-            3. Follow the component API and token naming conventions.
+## Structure
 
-            ## Contact
+- tokens/ — design tokens (colors, spacing, typography)
+- components/ — UI components
+- docs/ — documentation and usage examples
 
-            Maintainer: hamzashaikhwork
-          branch: add/docs-readme
+## Contributing
+
+1. Fork the repo and create a topic branch.
+2. Run tests and linters before opening a PR.
+3. Follow the component API and token naming conventions.
+
+## Contact
+
+Maintainer: hamzashaikhwork
+EOF
+
+          # Commit and push if there are changes
+          git add docs/README.md
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+
+          commit_msg="${COMMIT_MSG_INPUT}"
+          if [ -z "$commit_msg" ]; then
+            commit_msg="Add docs/README.md"
+          fi
+
+          git commit -m "$commit_msg"
+          git push --set-upstream origin add/docs-readme
